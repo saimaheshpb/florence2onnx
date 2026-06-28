@@ -4,37 +4,37 @@ Welcome to the C++ port of the Florence-2 AI model!
 
 This project allows you to run Microsoft's powerful Florence-2 vision-language AI completely offline, locally on your own machine. Instead of relying on massive cloud GPUs or Python servers, this project uses highly optimized C++ and the ONNX Runtime to crunch the AI's math directly on your CPU.
 
-## 🧠 How The Magic Works
+## How The Magic Works
 
 At its core, AI is just math. Because computers only understand numbers, the AI model cannot "see" a JPEG image or "read" an English sentence directly. Here is the step-by-step flow of how this C++ engine works:
 
 ```mermaid
 graph TD
     %% Input Layer
-    UserImage[📷 Image File] --> |Bytes| Florence2Model
-    UserText[💬 Text Prompt] --> |String| Florence2Model
+    UserImage[Image File] --> |Bytes| Florence2Model
+    UserText[Text Prompt] --> |String| Florence2Model
     
     %% Core Model Class
-    subgraph Florence2Model [Florence2Model (The Main Brain)]
+    subgraph Florence2Model [Florence2Model The Main Brain]
         
         %% Step 1: Pre-processing
         subgraph PreProcessing [1. Pre-Processing]
-            Tokenizer[🔤 Tokenizer]
-            ImageProcessor[🖼️ CLIP Image Processor]
+            Tokenizer[Tokenizer]
+            ImageProcessor[CLIP Image Processor]
         end
         
         %% Step 2: ONNX Math Engines
         subgraph ONNXEngines [2. ONNX Math Engines]
-            VisionEncoder[👁️ Vision Encoder]
-            TextEmbedder[📝 Text Embedder]
-            MainEncoder[🧠 Main Encoder]
-            Decoder[🗣️ Decoder]
+            VisionEncoder[Vision Encoder]
+            TextEmbedder[Text Embedder]
+            MainEncoder[Main Encoder]
+            Decoder[Decoder]
         end
         
         %% Step 3: Post-processing
         subgraph PostProcessing [3. Post-Processing]
-            OutputTokenizer[🔤 Tokenizer]
-            PostProcessor[✨ Post Processor]
+            OutputTokenizer[Tokenizer]
+            PostProcessor[Post Processor]
         end
         
         %% The Flow Connections
@@ -67,7 +67,7 @@ graph TD
 
 ---
 
-## 🚀 How to Run It Yourself
+## How to Run It Yourself
 
 Follow these steps to run the AI from scratch on your own machine.
 
@@ -101,7 +101,7 @@ export DYLD_LIBRARY_PATH=/usr/local/opt/onnxruntime/lib:$DYLD_LIBRARY_PATH
 
 ---
 
-## 🖼️ How to Upload Your Own Image
+## How to Upload Your Own Image
 
 Want to see what the AI thinks of your dog? It's incredibly easy to test your own images.
 

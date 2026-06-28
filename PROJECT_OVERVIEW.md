@@ -1,46 +1,93 @@
 # Florence-2 C++ Local Engine: Project Overview
 
-This document provides a high-level, non-technical explanation of what this project is, why it was built, and how it works under the hood. If you are new to the codebase and want to understand the "big picture" before reading the code, you are in the right place.
+This document provides a high-level, technical overview of the Florence-2 C++ port. Its purpose is to explain the architecture and core execution flow of the system for developers and contributors who wish to understand the engine before diving into the source code.
 
 ---
 
 ## 1. What is this project?
 
-This project is a standalone, C++ application that allows you to run **Microsoft's Florence-2 Vision-Language AI** completely locally on your own computer, using only your CPU. 
+This project is a standalone, C++ application that executes Microsoft's Florence-2 Vision-Language AI model locally using CPU inference. 
 
-Florence-2 is an incredible AI model that can look at images and understand them. It can describe what it sees, find specific objects, read text in the image, and answer questions. 
+Florence-2 is a versatile vision-language model capable of image captioning, object detection, optical character recognition (OCR), and visual question answering. By utilizing ONNX Runtime, this project removes the dependency on Python environments (like PyTorch) and cloud GPUs, enabling the model to run efficiently on edge devices and consumer hardware.
 
-## 2. Why does this project exist?
+## 2. Architecture and Data Flow
 
-Typically, AI models like Florence-2 are built in **Python** using massive frameworks like PyTorch, and they require extremely powerful, expensive cloud GPUs to run. 
+At a high level, the system translates user inputs (images and text) into mathematical tensors, processes them through four specialized ONNX models, and decodes the resulting tensors back into natural language.
 
-This project strips away all of that overhead. By porting the engine to pure **C++** and utilizing **ONNX Runtime** (a universal engine for running AI math), we've made it possible to run this massive AI locally on a MacBook or embedded device. No Python required, no internet connection required, no cloud servers, and no expensive GPUs.
+The following architecture diagram illustrates the end-to-end execution flow:
 
-## 3. How does it work? (The Architecture)
+```mermaid
+graph TD
+    %% Input Layer
+    UserImage[Image File] --> |Bytes| Florence2Model
+    UserText[Text Prompt] --> |String| Florence2Model
+    
+    %% Core Model Class
+    subgraph Florence2Model [Florence2Model The Main Brain]
+        
+        %% Step 1: Pre-processing
+        subgraph PreProcessing [1. Pre-Processing]
+            Tokenizer[Tokenizer]
+            ImageProcessor[CLIP Image Processor]
+        end
+        
+        %% Step 2: ONNX Math Engines
+        subgraph ONNXEngines [2. ONNX Math Engines]
+            VisionEncoder[Vision Encoder]
+            TextEmbedder[Text Embedder]
+            MainEncoder[Main Encoder]
+            Decoder[Decoder]
+        end
+        
+        %% Step 3: Post-processing
+        subgraph PostProcessing [3. Post-Processing]
+            OutputTokenizer[Tokenizer]
+            PostProcessor[Post Processor]
+        end
+        
+        %% The Flow Connections
+        Tokenizer --> |Numbers| TextEmbedder
+        ImageProcessor --> |Pixels| VisionEncoder
+        
+        VisionEncoder --> |Image Features| MainEncoder
+        TextEmbedder --> |Text Embeddings| MainEncoder
+        
+        MainEncoder --> |Hidden States| Decoder
+        
+        Decoder --> |Number IDs| OutputTokenizer
+        OutputTokenizer --> |English Text| PostProcessor
+    end
 
-Under the hood, the AI doesn't understand English or JPEG pixels; it only understands pure mathematics (massive arrays of numbers). Our C++ application acts as the "glue" that translates your real-world inputs into math, feeds it to the AI, and translates the math back into English.
+    %% Output Layer
+    PostProcessor --> |Final Result| Result[Result: 'A cat on a couch']
 
-Here is the step-by-step journey of how the engine processes an image and a text prompt:
+    %% Styling
+    style Florence2Model fill:#f9f9f9,stroke:#333,stroke-width:2px
+    style PreProcessing fill:#e1f5fe,stroke:#03a9f4
+    style ONNXEngines fill:#e8f5e9,stroke:#4caf50
+    style PostProcessing fill:#fff3e0,stroke:#ff9800
+    style Result fill:#f3e5f5,stroke:#9c27b0,stroke-width:2px
+```
 
-### Step A: The Translators (Preprocessing)
-1. **The Tokenizer (Text to Math):** When you give the AI a prompt like "Describe this image", our Tokenizer chops the sentence into pieces ("tokens") and looks up each piece in a dictionary to convert it into integer IDs.
-2. **The Image Processor (Pixels to Math):** When you upload a JPEG, our Image Processor resizes it to exactly 500x500 pixels, normalizes the colors, and flattens it into an array of 750,000 float numbers.
+### Step A: Preprocessing
+1. **The Tokenizer:** The text prompt is tokenized using a Byte-Pair Encoding (BPE) algorithm to convert the string into a sequence of integer IDs.
+2. **The Image Processor:** The input image is resized, center-cropped, and normalized using predefined mean and standard deviation values. The resulting pixels are flattened into a multidimensional float array.
 
-### Step B: The Math Engines (ONNX)
-Once we have numbers, we hand them to the four core ONNX models (the actual "brains"):
+### Step B: Core ONNX Execution
+The core mathematical operations are handled by four ONNX sessions:
 
-1. **Text Embedder:** Converts the word integers into complex 768-dimensional mathematical vectors that capture the "meaning" of the words.
-2. **Vision Encoder:** Looks at the 750,000 pixel floats and extracts visual features, identifying shapes, objects, and colors.
-3. **The Main Encoder (The Glue):** We concatenate the text vectors and the image vectors together. The Main Encoder cross-references them, allowing the AI to understand how the words you typed relate to the objects it sees in the image.
+1. **Text Embedder:** Converts the tokenized integer IDs into 768-dimensional dense vectors.
+2. **Vision Encoder:** Extracts visual features from the normalized pixel array, mapping them into the same 768-dimensional latent space.
+3. **The Main Encoder:** Concatenates the text and vision embeddings and processes them through multiple self-attention layers. This fuses the spatial and semantic context into a unified representation.
 
-### Step C: Generating the Answer (The Loop)
-Finally, we need the AI to speak.
-- **The Decoder:** The Decoder looks at the deep understanding generated by the Main Encoder and starts predicting what the first word of the answer should be. 
-- **The Loop:** It guesses a word, saves it, and then runs *again* to guess the next word. It repeats this loop dozens of times, generating the sentence one word at a time, until it outputs a special "End of Sentence" signal.
-- **The Post-Processor:** We take those final output numbers and translate them back into English text to show on your screen!
+### Step C: Autoregressive Decoding
+The final stage is an autoregressive generation loop:
+- **The Decoder:** Accepts the fused representations from the Main Encoder and a start token `</s>`. It outputs a probability distribution (logits) for the next token and a KV cache for optimization.
+- **Generation Loop:** The highest probability token is selected, appended to the sequence, and fed back into the decoder. This process repeats until an end-of-sequence token is generated or the maximum length is reached.
+- **Post-Processing:** The generated token IDs are decoded back into a human-readable string and formatted to produce the final result.
 
 ---
 
-## 4. Where to go next?
+## 3. Next Steps
 
-Now that you understand the conceptual flow, check out the **`README.md`** file for technical instructions on how to build the code, download the models, and run your first test image!
+For detailed instructions on compiling the binaries, downloading the ONNX models, and running test inferences, please refer to the `README.md` file in the project root.
